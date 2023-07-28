@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+      "target": "ES2016",
+      "module": "esnext",
+      "lib": ["esnext","DOM","WebWorker"],
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "strict": true,
+      "jsx": "preserve",
+      "strictNullChecks": true,
+      "resolveJsonModule": true,
+    }
+  }

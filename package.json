@@ -1,0 +1,35 @@
+{
+  "name": "@web-localstorage-plus/pinia",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "tsup --watch src"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/supanpanCn/web-localstorage-plus.git"
+  },
+  "author": "supanpan",
+  "license": "MIT",
+  "peerDependencies": {
+    "pinia": "*"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.196",
+    "pinia": "*",
+    "tsup": "^6.5.0",
+    "typescript": "^4.9.5",
+    "vite": "^4.4.7",
+    "webpack": "^5.88.2"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "magic-string": "^0.30.1",
+    "web-localstorage-plus": "^0.0.15"
+  }
+}
