@@ -123,6 +123,22 @@ var helpers = {
     return union(
       paths.filter((v) => v).map((v) => String(v)).sort((a, b) => a.split(".").length - b.split(".").length)
     );
+  },
+  deleteKey(id, ctx) {
+    if (ctx.getItem(id, NAMESPACE)) {
+      ctx.removeItem(id, NAMESPACE);
+    }
+  },
+  updateKey(ctx) {
+    const space = ctx.getItem(NAMESPACE);
+    if (space) {
+      const keys = Object.keys(space);
+      keys.forEach((v) => {
+        if (!spaceToStoreId.has(v)) {
+          helpers.deleteKey(v, ctx);
+        }
+      });
+    }
   }
 };
 function updateStore(paths, store, ctx, key, state) {
@@ -157,6 +173,7 @@ function activateState(payload) {
     const store = ctx.getItem(key, NAMESPACE);
     if (store) {
       const latest = updateStore(paths, store, ctx, key, state);
+      helpers.updateKey(ctx);
       piniaCtx.$patch(latest);
       return;
     }
@@ -212,20 +229,28 @@ function initialize(userConfig, store) {
   return response;
 }
 function handleHydrate(payload) {
-  const { state, persist, id, ctx } = payload;
+  const { state, persist, id, ctx, oldKey } = payload;
   const { paths, key } = initialize(persist, {
     id,
     state
   });
-  persistState({
-    key,
-    paths,
-    state,
-    ctx
-  });
+  if (persist) {
+    if (oldKey !== key) {
+      helpers.deleteKey(oldKey, ctx);
+    }
+    persistState({
+      key,
+      paths,
+      state,
+      ctx
+    });
+  } else {
+    helpers.deleteKey(id, ctx);
+  }
   return {
     paths,
-    state
+    state,
+    key
   };
 }
 function internalPiniaPlugin(ctx) {
@@ -244,8 +269,11 @@ function internalPiniaPlugin(ctx) {
       );
       return;
     }
-    if (!persist)
+    if (!persist) {
+      helpers.deleteKey(id, ctx);
       return;
+    }
+    ;
     const { paths, key } = initialize(persist, {
       id,
       state
@@ -259,10 +287,12 @@ function internalPiniaPlugin(ctx) {
     };
     store.$hydrate = (payload) => {
       const response = handleHydrate(__spreadProps(__spreadValues({}, payload), {
-        ctx
+        ctx,
+        oldKey: params.key
       }));
       params.state = response.state;
       params.paths = response.paths;
+      params.key = response.key;
     };
     store.$discard = (id2) => {
       ctx.removeItem(id2, NAMESPACE);

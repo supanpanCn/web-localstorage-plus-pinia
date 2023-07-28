@@ -9,7 +9,9 @@ yarn add web-localstorage-plus
 yarn add @web-localstorage-plus/pinia
 ```
 
-## 基本使用
+## 使用
+
+### 接管pinia持久化
 
 1.使用web-localstorage-plus初始化仓库
 
@@ -28,9 +30,9 @@ import setPiniaPersist from '@web-localstorage-plus/pinia';
 setPiniaPersist(pinia);
 ```
 
-## 设置热更新
+### 设置热更新
 
-在vite配置文件下导入并作为plugin使用
+- 在vite配置文件下导入并作为plugin使用
 
 ```ts
 import { getPlugin } from '@web-localstorage-plus/pinia';
@@ -41,7 +43,7 @@ export default defineConfig({
 })
 ```
 
-在webpack的配置文件下导入并作为plugin使用
+- 在webpack的配置文件下导入并作为plugin使用
 
 ```ts
 const { getPlugin } = require("@web-localstorage-plus/pinia")
@@ -51,3 +53,23 @@ module.exports = {
     plugins:[new PiniaPlugin()]
 }
 ```
+
+### 配置项
+
+- persist:false
+
+默认将pinia中的全部数据进行持久化存储，可以通过设置false禁用该行为
+
+- persist配置项
+
+1.paths
+
+设置需要持久化存储的key
+
+```ts
+['spp','a.b.c']
+```
+
+2.key
+
+存储的字段名称，默认是pinia的id

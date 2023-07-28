@@ -1,6 +1,6 @@
 {
   "name": "@web-localstorage-plus/pinia",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "scripts": {
     "dev": "tsup --watch src"
   },

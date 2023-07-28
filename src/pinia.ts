@@ -112,6 +112,22 @@ const helpers = {
         .sort((a, b) => a.split(".").length - b.split(".").length)
     );
   },
+  deleteKey(id:string,ctx:This){
+    if(ctx.getItem(id,NAMESPACE)){
+      ctx.removeItem(id,NAMESPACE)
+    }
+  },
+  updateKey(ctx:This){
+    const space = ctx.getItem(NAMESPACE)
+    if(space){
+      const keys = Object.keys(space)
+      keys.forEach(v=>{
+        if(!spaceToStoreId.has(v)){
+          helpers.deleteKey(v,ctx)
+        }
+      })
+    }
+  }
 };
 
 function updateStore(
@@ -153,6 +169,7 @@ function activateState(payload: Params) {
     const store = ctx.getItem(key, NAMESPACE);
     if (store) {
       const latest = updateStore(paths, store, ctx, key, state);
+      helpers.updateKey(ctx)
       piniaCtx.$patch(latest);
       return;
     }
@@ -217,20 +234,29 @@ function initialize(
 }
 
 function handleHydrate(payload: AnyObj){
-  const { state, persist, id,ctx } = payload;
+  const { state, persist, id, ctx ,oldKey} = payload;
   const { paths, key } = initialize(persist, {
     id,
     state,
   });
-  persistState({
-    key,
-    paths,
-    state,
-    ctx
-  })
+  if(persist){
+    if(oldKey !== key){
+      helpers.deleteKey(oldKey,ctx)
+    }
+    persistState({
+      key,
+      paths,
+      state,
+      ctx
+    })
+  }else{
+    helpers.deleteKey(id,ctx)
+  }
+  
   return {
     paths,
-    state
+    state,
+    key
   }
 }
 
@@ -253,7 +279,10 @@ function internalPiniaPlugin(ctx: This): PiniaPlugin {
       return;
     }
 
-    if (!persist) return;
+    if (!persist){
+      helpers.deleteKey(id,ctx)
+      return
+    };
 
     const { paths, key } = initialize(persist, {
       id,
@@ -271,10 +300,12 @@ function internalPiniaPlugin(ctx: This): PiniaPlugin {
     store.$hydrate = (payload: AnyObj) => {
       const response = handleHydrate({
         ...payload,
-        ctx
+        ctx,
+        oldKey:params.key
       })
       params.state = response.state;
-      params.paths = response.paths
+      params.paths = response.paths;
+      params.key = response.key;
     };
 
     store.$discard = (id:string) => {
