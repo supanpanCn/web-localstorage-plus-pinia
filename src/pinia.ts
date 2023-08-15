@@ -15,35 +15,61 @@ export type { PiniaPlugin, Pinia } from "pinia";
 
 import * as _ from "lodash";
 
-const { pick, isObject, union, set, mergeWith, cloneDeep } = _;
+const {
+  pick,
+  isPlainObject,
+  union,
+  set,
+  cloneDeep,
+  isArray,
+  concat,
+  get,
+  uniq
+} = _;
 
 const spaceToStoreId = new Map<string, string>([]);
 const NAMESPACE = "pinia";
-const overwriteFlag = "WAITING_OVERWRITE_";
-const deleteFlag = "WAITING_DELETE";
 
 const helpers = {
-  createObjByPaths(paths: string[], state: AnyObj) {
+  createObjByPaths(originPaths: string[], state: AnyObj) {
     let result: AnyObj = {};
     const missing: string[] = [];
-    function _getValueType(path: string) {
-      const arr = path.split(".");
-      let dy = cloneDeep(state);
-      arr.forEach((v) => {
-        dy = dy[v];
-      });
-
-      const type = Object.prototype.toString.call(dy);
-      return type;
-    }
+    const paths = originPaths.slice();
     for (let i = 0; i < paths.length; i++) {
-      const origin = pick(state, paths[i]);
-      const keys = paths[i].split(".");
-      if (origin[keys[0]] !== undefined) {
-        set(result, paths[i], `${overwriteFlag}${_getValueType(paths[i])}`);
+      const act = paths[i];
+      const picked = Object.keys(pick(state, act))
+
+      if (picked.length) {
+        const groups = paths.filter((v) => v.startsWith(act));
+        if (groups.length === 1) {
+          set(result, act, state[act]);
+          continue;
+        }
+        
+        groups.forEach((g) => {
+          const index = paths.findIndex((p) => p === g);
+          if (index > -1) {
+            paths.splice(index, 1);
+          }
+        });
+        i--
+        const [key] = act.split(".");
+        const t = {
+          [key]: {},
+        };
+        groups.shift();
+        groups.reverse();
+        for (let j = 0; j < groups.length; j++) {
+          const v = groups[j];
+          const val = get(state, v.split("."));
+          set(t, v, val);
+        }
+
+        result[key] = t[key];
+
         continue;
       }
-      missing.push(paths[i]);
+      missing.push(act);
     }
     missing.length &&
       console.warn(
@@ -67,42 +93,34 @@ const helpers = {
     }
     return keys;
   },
-  isSameType(a: string, b: string) {
-    if (a.startsWith(overwriteFlag)) {
-      const type = a.replace(overwriteFlag, "");
-      return type === Object.prototype.toString.call(b);
-    }
+  isSameType(a: any, b: any) {
     return (
-      Object.prototype.toString.call(a) !== Object.prototype.toString.call(b)
+      Object.prototype.toString.call(a) === Object.prototype.toString.call(b)
     );
   },
-  deleteRedundant(obj: AnyObj) {
-    for (const key in obj) {
-      if (obj[key] === deleteFlag) {
-        delete obj[key];
-        continue;
-      }
-      if (typeof obj[key] === "object") {
-        helpers.deleteRedundant(obj[key]);
+  isStringArray(arr:any[]){
+    return !arr.find(v=>typeof v !== 'string')
+  },
+  merge(tar:AnyObj,act:AnyObj){
+    for(let key in tar){
+      if(act[key]){
+        if(this.isSameType(act[key],tar[key])){
+          if(isPlainObject(act[key]) && isPlainObject(tar[key])){
+            this.merge(tar[key],act[key])
+            continue
+          }
+          if(isArray(tar[key]) && isArray(act[key])){
+            let newArr = concat(tar[key],act[key])
+            if(this.isStringArray(newArr)){
+              newArr = uniq(newArr)
+            }
+            tar[key] = newArr
+            continue
+          }
+          tar[key] = act[key]
+        }
       }
     }
-  },
-  mergeDeep(
-    obj1: AnyObj,
-    obj2: AnyObj,
-    callback: (a: any, b: any) => void
-  ): AnyObj {
-    return mergeWith(obj1, obj2, (objValue: any, srcValue: any) => {
-      if (isObject(objValue) && isObject(srcValue)) {
-        return helpers.mergeDeep(objValue, srcValue, callback);
-      }
-      if (objValue === undefined) {
-        return deleteFlag;
-      }
-      if (typeof callback === "function") {
-        return callback(objValue, srcValue);
-      }
-    });
   },
   normalizePaths(paths: string[]) {
     return union(
@@ -112,22 +130,30 @@ const helpers = {
         .sort((a, b) => a.split(".").length - b.split(".").length)
     );
   },
-  deleteKey(id:string,ctx:This){
-    if(ctx.getItem(id,NAMESPACE)){
-      ctx.removeItem(id,NAMESPACE)
+  deleteKey(id: string, ctx: This) {
+    if (ctx.getItem(id, NAMESPACE)) {
+      ctx.removeItem(id, NAMESPACE);
     }
   },
-  updateKey(ctx:This){
-    const space = ctx.getItem(NAMESPACE)
-    if(space){
-      const keys = Object.keys(space)
-      keys.forEach(v=>{
-        if(!spaceToStoreId.has(v)){
-          helpers.deleteKey(v,ctx)
+  updateKey(ctx: This) {
+    const space = ctx.getItem(NAMESPACE);
+    if (space) {
+      const keys = Object.keys(space);
+      keys.forEach((v) => {
+        if (!spaceToStoreId.has(v)) {
+          helpers.deleteKey(v, ctx);
         }
-      })
+      });
     }
-  }
+  },
+  setupTimeout(cb: () => void) {
+    const timer = setTimeout(() => {
+      if (typeof cb === "function") {
+        cb();
+      }
+      clearTimeout(timer);
+    }, 200);
+  },
 };
 
 function updateStore(
@@ -138,27 +164,7 @@ function updateStore(
   state: StateTree
 ) {
   let processingObj = helpers.createObjByPaths(paths, state);
-  processingObj = helpers.mergeDeep(
-    processingObj,
-    store,
-    (objValue, srcValue) => {
-      if (!helpers.isSameType(objValue, srcValue)) {
-        return objValue;
-      }
-    }
-  );
-  helpers.deleteRedundant(processingObj);
-  processingObj = helpers.mergeDeep(
-    processingObj,
-    state,
-    (objValue, srcValue) => {
-      if (typeof objValue === "string" && objValue.startsWith(overwriteFlag)) {
-        return srcValue;
-      }
-      return objValue;
-    }
-  );
-  helpers.deleteRedundant(processingObj);
+  helpers.merge(processingObj,store);
   ctx.setItem(key, processingObj, NAMESPACE);
   return processingObj;
 }
@@ -169,7 +175,7 @@ function activateState(payload: Params) {
     const store = ctx.getItem(key, NAMESPACE);
     if (store) {
       const latest = updateStore(paths, store, ctx, key, state);
-      helpers.updateKey(ctx)
+      helpers.updateKey(ctx);
       piniaCtx.$patch(latest);
       return;
     }
@@ -233,31 +239,42 @@ function initialize(
   return response as Required<PersistedStateOptions>;
 }
 
-function handleHydrate(payload: AnyObj){
-  const { state, persist, id, ctx ,oldKey} = payload;
+function handleHydrate(payload: AnyObj) {
+  const { state, persist, id, ctx, oldKey } = payload;
   const { paths, key } = initialize(persist, {
     id,
     state,
   });
-  if(persist){
-    if(oldKey !== key){
-      helpers.deleteKey(oldKey,ctx)
+  if (persist) {
+    if (oldKey !== key) {
+      helpers.deleteKey(oldKey, ctx);
     }
     persistState({
       key,
       paths,
       state,
-      ctx
-    })
-  }else{
-    helpers.deleteKey(id,ctx)
+      ctx,
+    });
+  } else {
+    helpers.deleteKey(id, ctx);
   }
-  
+
   return {
     paths,
     state,
-    key
+    key,
+  };
+}
+
+function createState(newS: StateTree, id:string,userConfig: PersistedStateOptions | boolean,ctx:This) {
+  const useId = id.replace('__hot:','').trim()
+  const key = typeof userConfig === 'boolean' ? useId : userConfig.key
+  if(spaceToStoreId.has(key!)){
+    const store = ctx.getItem(key!,NAMESPACE)
+    helpers.merge(store,newS)
+    return store
   }
+  return newS;
 }
 
 function internalPiniaPlugin(ctx: This): PiniaPlugin {
@@ -272,17 +289,17 @@ function internalPiniaPlugin(ctx: This): PiniaPlugin {
     if (id && id.startsWith("__hot:")) {
       window.postMessage(
         JSON.stringify({
-          state,
+          state: createState(state,id,persist,ctx),
           persist,
         })
       );
       return;
     }
 
-    if (!persist){
-      helpers.deleteKey(id,ctx)
-      return
-    };
+    if (!persist) {
+      helpers.deleteKey(id, ctx);
+      return;
+    }
 
     const { paths, key } = initialize(persist, {
       id,
@@ -301,15 +318,15 @@ function internalPiniaPlugin(ctx: This): PiniaPlugin {
       const response = handleHydrate({
         ...payload,
         ctx,
-        oldKey:params.key
-      })
+        oldKey: params.key,
+      });
       params.state = response.state;
       params.paths = response.paths;
       params.key = response.key;
     };
 
-    store.$discard = (id:string) => {
-      ctx.removeItem(id,NAMESPACE)
+    store.$discard = (id: string) => {
+      ctx.removeItem(id, NAMESPACE);
     };
 
     activateState(params);
@@ -352,7 +369,7 @@ export function acceptHMRUpdateWithHydration(initialUseStore: any, hot: any) {
       const useStore = newModule[exportName];
       if (isUseStore(useStore)) {
         const id = useStore.$id;
-        if(pinia._s.has(useStore.$id)){
+        if (pinia._s.has(useStore.$id)) {
           const ctx: StoreGeneric = pinia._s.get(id)!;
           if (!ctx) return;
           window.onmessage = (msg) => {
@@ -362,12 +379,15 @@ export function acceptHMRUpdateWithHydration(initialUseStore: any, hot: any) {
             });
           };
           useStore(pinia, ctx);
-        }else{
+        } else {
           if (id !== initialUseStore.$id && initialUseStore) {
             console.warn(
               `[@web-localstorage-plus/pinia]:检测到存储库的id从"${initialUseStore.$id}"变成"${id}"了`
             );
-            initialUseStore(pinia, pinia._s.get(initialUseStore.$id)!).$discard?.(initialUseStore.$id);
+            initialUseStore(
+              pinia,
+              pinia._s.get(initialUseStore.$id)!
+            ).$discard?.(initialUseStore.$id);
             useStore(pinia, pinia._s.get(id)!);
           }
         }

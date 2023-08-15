@@ -1,5 +1,5 @@
 
-/dist
+
 
 /.npm-only-allow
 
@@ -8,6 +8,8 @@
 .idea
 
 .vscode
+
+dist
 
 
 
