@@ -38,9 +38,13 @@ const helpers = {
     for (let i = 0; i < paths.length; i++) {
       const act = paths[i];
       const picked = Object.keys(pick(state, act))
-
+      
       if (picked.length) {
-        const groups = paths.filter((v) => v.startsWith(act));
+        let filterQuery = act
+        if(act.indexOf('.')>-1){
+          filterQuery = act.split('.')[0]
+        }
+        const groups = paths.filter((v) => v.startsWith(filterQuery));
         if (groups.length === 1) {
           set(result, act, state[act]);
           continue;
@@ -57,7 +61,10 @@ const helpers = {
         const t = {
           [key]: {},
         };
-        groups.shift();
+        const shiftIndex = groups.findIndex(g=>g===filterQuery)
+        if(shiftIndex>-1){
+          groups.splice(shiftIndex,1)
+        }
         groups.reverse();
         for (let j = 0; j < groups.length; j++) {
           const v = groups[j];
