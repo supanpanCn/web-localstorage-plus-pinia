@@ -84,7 +84,7 @@ const helpers = {
     for (let key in obj) {
       if (obj.hasOwnProperty(key)) {
         let newKey = parentKey ? `${parentKey}.${key}` : key;
-        if (typeof obj[key] === "object" && obj[key] !== null) {
+        if (isPlainObject(obj[key])) {
           keys.push(...helpers.createPathsByObj(obj[key], newKey));
         } else {
           keys.push(newKey);
